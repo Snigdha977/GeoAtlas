@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.article_utils import extract_article, geocode_location, infer_location_candidates, sanitize_location_hints
+from app.config import get_settings
 from app.feed_utils import (
     FeedError,
     discover_feeds_from_html,
@@ -219,6 +220,7 @@ def check_source_health(db: Session, source: ExternalSource) -> tuple[ExternalSo
 
 
 def run_ingestion(db: Session, source: ExternalSource, trigger_type: str = "manual") -> IngestionJob:
+    settings = get_settings()
     job = IngestionJob(source_id=source.id, trigger_type=trigger_type, status="running", started_at=datetime.now(timezone.utc))
     db.add(job)
     db.commit()
@@ -241,18 +243,26 @@ def run_ingestion(db: Session, source: ExternalSource, trigger_type: str = "manu
         source.detected_language = source.detected_language or parsed.get("language")
         source.site_url = source.site_url or parsed.get("site_url")
 
-        for item in parsed["items"]:
-            job.fetched_count += 1
-            content_hash = item_hash(item)
-            exists = db.scalar(
-                select(RawFetchedItem).where(
+        feed_items = parsed["items"]
+        content_hashes = [item_hash(item) for item in feed_items]
+        existing_hashes = set(
+            db.scalars(
+                select(RawFetchedItem.content_hash).where(
                     RawFetchedItem.source_id == source.id,
-                    RawFetchedItem.content_hash == content_hash,
+                    RawFetchedItem.content_hash.in_(content_hashes),
                 )
             )
-            if exists:
+        ) if content_hashes else set()
+        new_items_processed = 0
+
+        for item, content_hash in zip(feed_items, content_hashes):
+            job.fetched_count += 1
+            if content_hash in existing_hashes:
                 job.duplicate_raw_count += 1
                 continue
+            if new_items_processed >= settings.ingest_max_new_items:
+                break
+            new_items_processed += 1
             raw = RawFetchedItem(
                 source_id=source.id,
                 job_id=job.id,
@@ -272,7 +282,7 @@ def run_ingestion(db: Session, source: ExternalSource, trigger_type: str = "manu
             image_url = item.get("image_url")
             published_at = item.get("published_at")
             extraction_status = "rss_only"
-            if item.get("url"):
+            if settings.article_enrichment_enabled and item.get("url"):
                 try:
                     article = extract_article(item["url"])
                     title = article.title or title
@@ -365,7 +375,11 @@ def _store_best_location(db: Session, item: NormalizedItem, hints: list[dict]) -
     if not hints:
         return
     best = dict(hints[0])
-    if best.get("latitude") is None or best.get("longitude") is None:
+    settings = get_settings()
+    if (
+        settings.external_geocoding_enabled
+        and (best.get("latitude") is None or best.get("longitude") is None)
+    ):
         try:
             geocoded = geocode_location(best["name"])
         except FeedError:

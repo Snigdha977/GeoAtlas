@@ -160,7 +160,12 @@ class ArticleParser(HTMLParser):
 
 
 def extract_article(url: str) -> ArticleContent:
-    fetched = safe_fetch(url)
+    settings = get_settings()
+    fetched = safe_fetch(
+        url,
+        timeout_seconds=settings.article_fetch_timeout_seconds,
+        max_bytes=settings.max_article_bytes,
+    )
     parser = ArticleParser(fetched.url)
     parser.feed(decode_html(fetched.body, fetched.content_type))
     article_json = _article_json_ld(parser.json_ld)

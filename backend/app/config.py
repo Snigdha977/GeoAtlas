@@ -23,6 +23,21 @@ class Settings:
     fetch_timeout_seconds: int = int(getenv("GEOATLAS_FETCH_TIMEOUT_SECONDS", "10"))
     max_feed_bytes: int = int(getenv("GEOATLAS_MAX_FEED_BYTES", "5242880"))
     user_agent: str = getenv("GEOATLAS_USER_AGENT", "GeoAtlasDataCollector/1.0")
+    ingest_max_new_items: int = int(getenv("GEOATLAS_INGEST_MAX_NEW_ITEMS", "25"))
+    article_enrichment_enabled: bool = getenv("GEOATLAS_ARTICLE_ENRICHMENT_ENABLED", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    article_fetch_timeout_seconds: int = int(getenv("GEOATLAS_ARTICLE_FETCH_TIMEOUT_SECONDS", "4"))
+    max_article_bytes: int = int(getenv("GEOATLAS_MAX_ARTICLE_BYTES", "2097152"))
+    external_geocoding_enabled: bool = getenv("GEOATLAS_EXTERNAL_GEOCODING_ENABLED", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     geocoder_url: str | None = getenv("GEOATLAS_GEOCODER_URL", "https://nominatim.openstreetmap.org/search")
     geocoder_timeout_seconds: int = int(getenv("GEOATLAS_GEOCODER_TIMEOUT_SECONDS", "5"))
     geocoder_min_interval_seconds: float = float(getenv("GEOATLAS_GEOCODER_MIN_INTERVAL_SECONDS", "1.0"))

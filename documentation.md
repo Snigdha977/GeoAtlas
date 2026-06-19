@@ -40,6 +40,30 @@ Use this format:
 
 ## Work Log
 
+### 2026-06-19 - Low-Impact Ingestion
+
+**Developer:** Codex
+
+**Goal:** Prevent manual RSS ingestion from making the local PC unresponsive.
+
+**What changed:**
+- `backend/app/services.py`: Replaced one duplicate query per feed item with one batch query and capped each run at 25 new items by default.
+- `backend/app/config.py`, `backend/.env.example`: Made article-page enrichment and external geocoding opt-in, with separate article timeout and response-size limits.
+- `backend/app/feed_utils.py`, `backend/app/article_utils.py`: Added lightweight fetch limits for optional article enrichment.
+- `backend/tests/test_ingestion_performance.py`: Added regression coverage for low-impact defaults.
+
+**How to run or verify:**
+- Restart the API after pulling the change.
+- Run an ingest from the Sources panel.
+- Run `python -m unittest discover -s tests -v` from `backend`.
+
+**Output or result:**
+- Default ingest uses RSS content, known-place coordinates, one duplicate lookup, and at most 25 new records.
+- Slow article hosts and Nominatim no longer sit in the default ingestion loop.
+
+**Known issues or follow-ups:**
+- Set `GEOATLAS_ARTICLE_ENRICHMENT_ENABLED=true` or `GEOATLAS_EXTERNAL_GEOCODING_ENABLED=true` only on a server intended to perform deeper enrichment.
+
 ### 2026-06-18 - Location False-Positive Cleanup
 
 **Developer:** Ahan
