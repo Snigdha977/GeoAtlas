@@ -83,8 +83,17 @@ def validate_public_url(url: str) -> None:
             raise FeedError("URL resolves to a blocked private or reserved network.")
 
 
-def safe_fetch(url: str, etag: str | None = None, last_modified: str | None = None) -> FetchResult:
+def safe_fetch(
+    url: str,
+    etag: str | None = None,
+    last_modified: str | None = None,
+    *,
+    timeout_seconds: int | None = None,
+    max_bytes: int | None = None,
+) -> FetchResult:
     settings = get_settings()
+    timeout = timeout_seconds or settings.fetch_timeout_seconds
+    response_limit = max_bytes or settings.max_feed_bytes
     current_url = url
     opener = build_opener(NoRedirectHandler)
     headers = {"User-Agent": settings.user_agent}
@@ -97,8 +106,8 @@ def safe_fetch(url: str, etag: str | None = None, last_modified: str | None = No
         validate_public_url(current_url)
         request = Request(current_url, headers=headers)
         try:
-            response = opener.open(request, timeout=settings.fetch_timeout_seconds)
-            body = response.read(settings.max_feed_bytes + 1)
+            response = opener.open(request, timeout=timeout)
+            body = response.read(response_limit + 1)
         except HTTPError as exc:
             if exc.code in {301, 302, 303, 307, 308} and exc.headers.get("Location"):
                 current_url = urljoin(current_url, exc.headers["Location"])
@@ -109,9 +118,9 @@ def safe_fetch(url: str, etag: str | None = None, last_modified: str | None = No
         except URLError as exc:
             raise FeedError(f"Could not fetch URL: {exc.reason}") from exc
         except TimeoutError as exc:
-            raise FeedError(f"Source timed out after {settings.fetch_timeout_seconds} seconds.") from exc
-        if len(body) > settings.max_feed_bytes:
-            raise FeedError("Response is larger than the configured feed size limit.")
+            raise FeedError(f"Source timed out after {timeout} seconds.") from exc
+        if len(body) > response_limit:
+            raise FeedError("Response is larger than the configured size limit.")
         final_url = response.geturl()
         validate_public_url(final_url)
         return FetchResult(
